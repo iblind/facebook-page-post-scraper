@@ -14,7 +14,7 @@ def request_until_succeed(url):
     req = urllib2.Request(url)
     success = False
     while success is False:
-        try: 
+        try:
             response = urllib2.urlopen(req)
             if response.getcode() == 200:
                 success = True
@@ -32,14 +32,14 @@ def request_until_succeed(url):
 
 # Needed to write tricky unicode correctly to csv
 def unicode_normalize(text):
-    return text.translate({ 0x2018:0x27, 0x2019:0x27, 0x201C:0x22, 
+    return text.translate({ 0x2018:0x27, 0x2019:0x27, 0x201C:0x22,
                             0x201D:0x22, 0xa0:0x20 }).encode('utf-8')
 
 def getFacebookCommentFeedData(status_id, access_token, num_comments):
 
     # Construct the URL string
         base = "https://graph.facebook.com/v2.6"
-        node = "/%s/comments" % status_id 
+        node = "/%s/comments" % status_id
         fields = "?fields=id,message,like_count,created_time,comments,from,attachment"
         parameters = "&order=chronological&limit=%s&access_token=%s" % \
                 (num_comments, access_token)
@@ -49,7 +49,7 @@ def getFacebookCommentFeedData(status_id, access_token, num_comments):
         data = request_until_succeed(url)
         if data is None:
             return None
-        else:   
+        else:
             return json.loads(data)
 
 def processFacebookComment(comment, status_id, parent_id = ''):
@@ -63,7 +63,9 @@ def processFacebookComment(comment, status_id, parent_id = ''):
     comment_id = comment['id']
     comment_message = '' if 'message' not in comment else \
             unicode_normalize(comment['message'])
-    comment_author = unicode_normalize(comment['from']['name'])
+    comment_author = '' if 'name' not in comment['from'] else \
+            unicode_normalize(comment['from']['name'])
+    unicode_normalize(comment['from']['name'])
     comment_likes = 0 if 'like_count' not in comment else \
             comment['like_count']
 
@@ -90,7 +92,7 @@ def processFacebookComment(comment, status_id, parent_id = ''):
 def scrapeFacebookPageFeedComments(page_id, access_token):
     with open('%s_facebook_comments.csv' % file_id, 'wb') as file:
         w = csv.writer(file)
-        w.writerow(["comment_id", "status_id", "parent_id", "comment_message", 
+        w.writerow(["comment_id", "status_id", "parent_id", "comment_message",
             "comment_author", "comment_published", "comment_likes"])
 
         num_processed = 0   # keep a count on how many we've processed
@@ -107,12 +109,12 @@ def scrapeFacebookPageFeedComments(page_id, access_token):
             for status in reader:
                 has_next_page = True
 
-                comments = getFacebookCommentFeedData(status['status_id'], 
+                comments = getFacebookCommentFeedData(status['status_id'],
                         access_token, 100)
 
-                while has_next_page and comments is not None:				
+                while has_next_page and comments is not None:
                     for comment in comments['data']:
-                        w.writerow(processFacebookComment(comment, 
+                        w.writerow(processFacebookComment(comment,
                             status['status_id']))
 
                         if 'comments' in comment:
@@ -122,20 +124,24 @@ def scrapeFacebookPageFeedComments(page_id, access_token):
                                     comment['id'], access_token, 100)
 
                             while has_next_subpage:
-                                for subcomment in subcomments['data']:
+                                if 'data' in subcomments:
+                                   for subcomment in subcomments['data']:
                                     # print (processFacebookComment(
-                                        # subcomment, status['status_id'], 
+                                        # subcomment, status['status_id'],
                                         # comment['id']))
-                                    w.writerow(processFacebookComment(
-                                            subcomment, 
-                                            status['status_id'], 
-                                            comment['id']))
+                                       w.writerow(processFacebookComment(
+                                               subcomment,
+                                               status['status_id'],
+                                               comment['id']))
 
-                                    num_processed += 1
-                                    if num_processed % 1000 == 0:
-                                        print "%s Comments Processed: %s" % \
-                                                (num_processed, 
-                                                    datetime.datetime.now())
+                                       num_processed += 1
+                                       if num_processed % 1000 == 0:
+                                           print "%s Comments Processed: %s" % \
+                                                   (num_processed,
+                                                       datetime.datetime.now())
+                                else:
+                                   has_next_subpage = False
+
 
                                 if 'paging' in subcomments:
                                     if 'next' in subcomments['paging']:
@@ -155,7 +161,7 @@ def scrapeFacebookPageFeedComments(page_id, access_token):
                             print "%s Comments Processed: %s" % \
                                     (num_processed, datetime.datetime.now())
 
-                    if 'paging' in comments:		
+                    if 'paging' in comments:
                         if 'next' in comments['paging']:
                             comments = json.loads(request_until_succeed(
                                         comments['paging']['next']))
